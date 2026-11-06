@@ -1,0 +1,12 @@
+services:
+  face-service:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      DETECTOR_BACKEND: retinaface      # hoặc scrfd
+      MATCH_THRESHOLD: "0.40"
+      # API_KEY: change-me
+      # VECTOR_TTL_SECONDS: "3600"
+    volumes:
+      - ./models:/srv/models:ro
+      - ./data:/srv/data
