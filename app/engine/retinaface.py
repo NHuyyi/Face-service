@@ -54,23 +54,29 @@ class RetinaFaceDetector:
         inp = self.sess.get_inputs()[0]
         self.input_name = inp.name
         h, w = inp.shape[2], inp.shape[3]
-        # Model export tĩnh -> dùng đúng kích thước đó; động -> dùng input_size
-        self.input_h = h if isinstance(h, int) else input_size
-        self.input_w = w if isinstance(w, int) else input_size
+        # Model export tĩnh -> dùng đúng kích thước đó; động -> dùng input_size (> 0)
+        self.input_h = h if (isinstance(h, int) and h > 0) else input_size
+        self.input_w = w if (isinstance(w, int) and w > 0) else input_size
         self.score_thr, self.nms_thr = score_thr, nms_thr
         self.priors = make_priors(self.input_h, self.input_w)
 
     def detect(self, img_bgr: np.ndarray) -> List[DetectedFace]:
+        if img_bgr is None or img_bgr.size == 0 or img_bgr.ndim != 3:
+            return []
         canvas, scale = letterbox(img_bgr, (self.input_w, self.input_h), MEAN_BGR)
         blob = (canvas - np.asarray(MEAN_BGR, dtype=np.float32)).transpose(2, 0, 1)[None]
         outs = self.sess.run(None, {self.input_name: np.ascontiguousarray(blob, dtype=np.float32)})
         return self.postprocess(outs, scale)
 
     def postprocess(self, outs: Sequence[np.ndarray], scale: float) -> List[DetectedFace]:
+        if not outs or scale <= 0:
+            return []
         by_dim = {o.shape[-1]: o[0] for o in outs}
+        if 4 not in by_dim or 2 not in by_dim or 10 not in by_dim:
+            return []
         loc, conf, lm = by_dim[4], by_dim[2], by_dim[10]
         scores = conf[:, 1]
-        mask = scores > self.score_thr
+        mask = scores >= self.score_thr
         if not mask.any():
             return []
         priors = self.priors[mask]

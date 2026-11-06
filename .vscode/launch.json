@@ -2,6 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Face Service (RetinaFace)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--host", "0.0.0.0", "--port", "8000"],
+      "env": { "DETECTOR_BACKEND": "retinaface", "MATCH_THRESHOLD": "0.40" }
+    },
+    {
       "name": "Face Service (SCRFD)",
       "type": "debugpy",
       "request": "launch",
