@@ -1,0 +1,7 @@
+detector,setting,ap,count_face,max_recall
+RetinaFace,Easy,0.9318,438,0.9612
+RetinaFace,Medium,0.9059,698,0.9413
+RetinaFace,Hard,0.6665,1871,0.7461
+SCRFD,Easy,0.947,438,0.9772
+SCRFD,Medium,0.9364,698,0.9713
+SCRFD,Hard,0.8599,1871,0.9172

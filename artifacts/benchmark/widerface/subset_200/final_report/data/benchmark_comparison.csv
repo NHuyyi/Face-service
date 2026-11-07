@@ -1,0 +1,15 @@
+category,metric,retinaface,scrfd,difference_or_ratio
+Accuracy (AP),Easy AP,0.9318,0.9470,-0.0152
+Accuracy (AP),Medium AP,0.9059,0.9364,-0.0305
+Accuracy (AP),Hard AP,0.6665,0.8599,-0.1934
+Latency (Pre),Mean (ms),11.79,13.38,-1.60 ms
+Latency (Inference),Mean (ms),361.96,114.13,3.17x (SCRFD nhanh hơn)
+Latency (Inference),Median (ms),379.47,117.86,3.22x
+Latency (Inference),P95 (ms),447.51,144.18,3.10x
+Latency (Post),Mean (ms),1.41,10.40,-9.00 ms
+Latency (Total),Mean (ms),375.15,137.91,2.72x (SCRFD nhanh hơn)
+Latency (Total),Median (ms),392.74,141.19,2.78x
+Latency (Total),P95 (ms),467.98,184.59,2.54x
+Throughput,Sequential FPS,2.67,7.25,2.72x higher
+Detections,Total Raw Detections (thr>=0.02),4320,49018,11.35x
+Detections,Mean Detections / Image,21.6,245.1,+223.5

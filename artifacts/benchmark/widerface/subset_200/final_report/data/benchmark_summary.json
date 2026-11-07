@@ -1,0 +1,165 @@
+{
+  "metadata": {
+    "benchmark_scope": "200-image WIDER FACE Validation representative subset benchmark (NOT official full WIDER FACE AP)",
+    "total_images": 200,
+    "random_seed": 42,
+    "sampling_method": "Stratified random sampling across all 61 event categories (44 events x 3 images, 17 events x 4 images)",
+    "score_threshold": 0.02,
+    "nms_threshold": 0.4,
+    "device": "CPU",
+    "provider": "CPUExecutionProvider",
+    "benchmark_duration_seconds": 104.85,
+    "timestamp": "2026-11-07 22:29:34"
+  },
+  "ground_truth_subset": {
+    "total_faces": 2107,
+    "easy_faces": 438,
+    "medium_faces": 698,
+    "hard_faces": 1871
+  },
+  "retinaface": {
+    "model_path": "models\\retinaface.onnx",
+    "input_resolution": [
+      640,
+      640
+    ],
+    "metrics": {
+      "easy": {
+        "ap": 0.9318,
+        "count_face": 438,
+        "max_recall": 0.9612
+      },
+      "medium": {
+        "ap": 0.9059,
+        "count_face": 698,
+        "max_recall": 0.9413
+      },
+      "hard": {
+        "ap": 0.6665,
+        "count_face": 1871,
+        "max_recall": 0.7461
+      },
+      "meta": {
+        "total_images": 200,
+        "total_predictions": 4320,
+        "score_range": [
+          0.02,
+          0.9999
+        ]
+      }
+    },
+    "latency": {
+      "pre_ms": {
+        "mean": 11.786394,
+        "median": 11.71415,
+        "p95": 15.459269999999997,
+        "std": 3.4689020989448522,
+        "min": 6.6369,
+        "max": 38.7449
+      },
+      "infer_ms": {
+        "mean": 361.9619935,
+        "median": 379.4688,
+        "p95": 447.5128749999999,
+        "std": 68.01619356595977,
+        "min": 233.77,
+        "max": 587.4577
+      },
+      "post_ms": {
+        "mean": 1.4054755,
+        "median": 0.71955,
+        "p95": 4.909719999999988,
+        "std": 2.691407197629104,
+        "min": 0.0827,
+        "max": 23.16
+      },
+      "total_ms": {
+        "mean": 375.153863,
+        "median": 392.7366,
+        "p95": 467.984525,
+        "std": 70.74171482077128,
+        "min": 241.6486,
+        "max": 626.5823
+      },
+      "total_faces": 4320,
+      "mean_faces_per_img": 21.6,
+      "fps": 2.67
+    }
+  },
+  "scrfd": {
+    "model_path": "models\\det_10g.onnx",
+    "input_resolution": [
+      640,
+      640
+    ],
+    "metrics": {
+      "easy": {
+        "ap": 0.947,
+        "count_face": 438,
+        "max_recall": 0.9772
+      },
+      "medium": {
+        "ap": 0.9364,
+        "count_face": 698,
+        "max_recall": 0.9713
+      },
+      "hard": {
+        "ap": 0.8599,
+        "count_face": 1871,
+        "max_recall": 0.9172
+      },
+      "meta": {
+        "total_images": 200,
+        "total_predictions": 49018,
+        "score_range": [
+          0.02,
+          0.9276
+        ]
+      }
+    },
+    "latency": {
+      "pre_ms": {
+        "mean": 13.381577,
+        "median": 13.01985,
+        "p95": 19.39770499999999,
+        "std": 4.123782921514056,
+        "min": 7.4984,
+        "max": 39.3921
+      },
+      "infer_ms": {
+        "mean": 114.1297805,
+        "median": 117.86205,
+        "p95": 144.17873500000002,
+        "std": 22.28312385874947,
+        "min": 62.6807,
+        "max": 206.5088
+      },
+      "post_ms": {
+        "mean": 10.401459500000001,
+        "median": 3.9335500000000003,
+        "p95": 52.35752499999998,
+        "std": 19.562657326892218,
+        "min": 1.0764,
+        "max": 181.0397
+      },
+      "total_ms": {
+        "mean": 137.912817,
+        "median": 141.18775,
+        "p95": 184.58929999999995,
+        "std": 32.160286553673785,
+        "min": 73.0928,
+        "max": 326.7835
+      },
+      "total_faces": 49018,
+      "mean_faces_per_img": 245.09,
+      "fps": 7.25
+    }
+  },
+  "comparison": {
+    "latency_ratio_rf_over_sc": 2.72,
+    "inference_speedup_scrfd": 3.17,
+    "ap_diff_easy": -0.0152,
+    "ap_diff_medium": -0.0305,
+    "ap_diff_hard": -0.1934
+  }
+}
