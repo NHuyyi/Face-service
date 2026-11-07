@@ -14,33 +14,58 @@ Service Python/FastAPI thay thế engine MobileFaceNet-192 (TFLite) đang chạy
 ## 1. Cài đặt
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+# 1. Clone repository (nếu bắt đầu từ mới)
+git clone https://github.com/NHuyyi/Face-service.git && cd Face-service
+
+# 2. Tạo môi trường ảo và cài đặt thư viện
+python -m venv .venv
+# Trên Windows:
+.\.venv\Scripts\activate
+# Trên Linux/macOS:
+source .venv/bin/activate
+
 pip install -r requirements.txt
-python scripts/download_models.py          # tải ArcFace (+ SCRFD) vào ./models
+
+# 3. Tải tự động toàn bộ 3 model ONNX vào ./models
+python scripts/download_models.py
 ```
 
-## 2. Chạy
+Lệnh `python scripts/download_models.py` sẽ tự động tải và xác minh tính toàn vẹn (SHA-256) của cả 3 mô hình cần thiết:
+- **`retinaface.onnx`** (RetinaFace ResNet50 – detector mặc định): Tải trực tiếp từ GitHub Releases của dự án.
+- **`w600k_r50.onnx`** (ArcFace ResNet50 – trích xuất vector 512 chiều).
+- **`det_10g.onnx`** (SCRFD-10G – detector dự phòng).
+
+Nếu các file model đã tồn tại và mã băm SHA-256 hợp lệ, script sẽ tự động bỏ qua để tiết kiệm băng thông.
+
+## 2. Chạy Service
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
-# hoặc: docker compose up --build        (cần models/ đã tải)
+# hoặc: docker compose up --build
 ```
-Swagger: http://localhost:8000/docs
+Swagger UI kiểm thử trực tiếp: http://localhost:8000/docs
+Trong VS Code, bạn cũng có thể mở tab **Run and Debug** và chọn profile **`Face Service (RetinaFace)`** (hoặc **`Face Service (SCRFD)`**).
 
-## 3. Model RetinaFace
+## 3. Quản lý Model RetinaFace & Export Thủ công (Tùy chọn)
 
-`DETECTOR_BACKEND=retinaface` (mặc định) cần `models/retinaface.onnx`, loại export từ
-[biubug6/Pytorch_Retinaface](https://github.com/biubug6/Pytorch_Retinaface):
+Trong cài đặt thông thường, bạn **không cần export thủ công** vì script `python scripts/download_models.py` đã tự động tải bản ONNX ResNet50 chuẩn sẵn sàng hoạt động.
 
-```bash
-git clone https://github.com/biubug6/Pytorch_Retinaface && cd Pytorch_Retinaface
-# tải weights (mobilenet0.25_Final.pth hoặc Resnet50_Final.pth) theo hướng dẫn của repo
-python convert_to_onnx.py --trained_model weights/Resnet50_Final.pth --network resnet50
-cp FaceDetector.onnx ../face-service/models/retinaface.onnx
-```
-Code tự đọc kích thước đầu vào cố định của file ONNX (thường 640×640) và nhận ba output
-`loc / conf / landms` theo số chiều, nên không phụ thuộc thứ tự output.
-Muốn chạy ngay không cần export: `DETECTOR_BACKEND=scrfd` (dùng `det_10g.onnx` đã tải sẵn).
+Nếu muốn tùy biến đường dẫn tải hoặc tự export từ checkpoint PyTorch:
+- **Tải từ URL máy chủ mirror/dự phòng (`--retinaface-url`):**
+  ```bash
+  python scripts/download_models.py --retinaface-url https://mirror.example.com/models/retinaface.onnx
+  ```
+  > [!NOTE]
+  > Tùy chọn `--retinaface-url` chỉ dùng để trỏ đến URL máy chủ mirror lưu trữ **chính xác cùng file nhị phân RetinaFace ResNet50 ONNX chuẩn**. File tải về **bắt buộc vẫn phải khớp đúng mã băm SHA-256 đã ghim** (`ed011b65dcc7e3f10f307c3d013bf2d0260ded5007314a96fb20339322463544`). Downloader không hỗ trợ các file weights ONNX tùy biến khác hash này nhằm ngăn chặn sai lệch kiến trúc hoặc suy giảm độ chính xác nhận diện.
+- **Export thủ công từ mã nguồn gốc [biubug6/Pytorch_Retinaface](https://github.com/biubug6/Pytorch_Retinaface) (Tùy chọn nâng cao):**
+  Nếu bạn tự huấn luyện hoặc xuất từ checkpoint PyTorch khác:
+  ```bash
+  git clone https://github.com/biubug6/Pytorch_Retinaface && cd Pytorch_Retinaface
+  # Tải checkpoint weights (Resnet50_Final.pth)
+  python convert_to_onnx.py --trained_model weights/Resnet50_Final.pth --network resnet50
+  cp FaceDetector.onnx ../Face-service/models/retinaface.onnx
+  ```
+Code detector tự động nhận diện kích thước đầu vào cố định ($640 \times 640$) và ánh xạ 3 tensor output `loc / conf / landms` theo số chiều, tương thích hoàn toàn với kiến trúc ResNet50.
 
 ## 4. Quy trình theo yêu cầu
 

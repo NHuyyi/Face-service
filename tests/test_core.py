@@ -147,3 +147,76 @@ def test_engine_tries_rotations_and_scrfd_decode():
     assert len(res) == 1
     cx, cy = 5 * 8, 3 * 8
     assert np.allclose(res[0].bbox, [cx - 32, cy - 32, cx + 32, cy + 32])
+
+
+def test_retinaface_dimension_handling():
+    """Kiểm tra xử lý kích thước đầu vào động hoặc không hợp lệ (-1, 0, string, None)."""
+    class FakeInput:
+        def __init__(self, h, w):
+            self.name = "input0"
+            self.shape = [1, 3, h, w]
+
+    class FakeSession:
+        def __init__(self, h, w):
+            self._inp = FakeInput(h, w)
+        def get_inputs(self):
+            return [self._inp]
+
+    # 1. Kích thước tĩnh dương: 640x640
+    det = RetinaFaceDetector.__new__(RetinaFaceDetector)
+    det.sess = FakeSession(640, 640)
+    inp = det.sess.get_inputs()[0]
+    h, w = inp.shape[2], inp.shape[3]
+    det.input_h = h if (isinstance(h, int) and h > 0) else 640
+    det.input_w = w if (isinstance(w, int) and w > 0) else 640
+    assert det.input_h == 640 and det.input_w == 640
+
+    # 2. Kích thước âm (-1): fallback về input_size
+    det_neg = RetinaFaceDetector.__new__(RetinaFaceDetector)
+    det_neg.sess = FakeSession(-1, -1)
+    inp = det_neg.sess.get_inputs()[0]
+    h, w = inp.shape[2], inp.shape[3]
+    det_neg.input_h = h if (isinstance(h, int) and h > 0) else 640
+    det_neg.input_w = w if (isinstance(w, int) and w > 0) else 640
+    assert det_neg.input_h == 640 and det_neg.input_w == 640
+
+    # 3. Kích thước chuỗi động ('?'): fallback về input_size
+    det_dyn = RetinaFaceDetector.__new__(RetinaFaceDetector)
+    det_dyn.sess = FakeSession("?", "?")
+    inp = det_dyn.sess.get_inputs()[0]
+    h, w = inp.shape[2], inp.shape[3]
+    det_dyn.input_h = h if (isinstance(h, int) and h > 0) else 640
+    det_dyn.input_w = w if (isinstance(w, int) and w > 0) else 640
+    assert det_dyn.input_h == 640 and det_dyn.input_w == 640
+
+
+def test_retinaface_threshold_boundary_and_empty_behavior():
+    """Kiểm tra biên ngưỡng (>=), output rỗng, ảnh rỗng và thiếu tensor."""
+    det = RetinaFaceDetector.__new__(RetinaFaceDetector)
+    det.input_w = det.input_h = 640
+    det.score_thr, det.nms_thr = 0.5, 0.4
+    det.priors = make_priors(640, 640)
+    n = len(det.priors)
+
+    loc, lm = np.zeros((1, n, 4), np.float32), np.zeros((1, n, 10), np.float32)
+    conf = np.zeros((1, n, 2), np.float32); conf[..., 0] = 1.0
+
+    # Điểm đúng bằng ngưỡng 0.5 -> phải được giữ lại với toán tử >=
+    conf[0, 10] = [0.5, 0.5]
+    out = det.postprocess([loc, conf, lm], scale=1.0)
+    assert len(out) == 1 and out[0].score == pytest.approx(0.5)
+
+    # Điểm dưới ngưỡng 0.5 -> rỗng
+    conf[0, 10] = [0.51, 0.49]
+    assert len(det.postprocess([loc, conf, lm], scale=1.0)) == 0
+
+    # Outs rỗng hoặc scale <= 0
+    assert len(det.postprocess([], scale=1.0)) == 0
+    assert len(det.postprocess([loc, conf, lm], scale=0.0)) == 0
+
+    # Thiếu outputs
+    assert len(det.postprocess([loc], scale=1.0)) == 0
+
+    # Ảnh rỗng trong detect
+    assert len(det.detect(None)) == 0
+    assert len(det.detect(np.zeros((0, 0, 3), np.uint8))) == 0
