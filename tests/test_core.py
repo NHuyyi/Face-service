@@ -6,6 +6,9 @@ from app.engine.align import ARCFACE_TEMPLATE, align_face, roll_angle_degrees, u
 from app.engine.retinaface import RetinaFaceDetector, decode_boxes, decode_landmarks, make_priors
 from app.engine.utils import nms
 from app.matching import batch_cosine_similarity, cosine_distance, cosine_similarity, is_match, l2_normalize
+from app.engine.align import AlignmentError
+from app.engine.engine import NoFaceError
+from app.engine.image import decode_image, read_image
 
 
 def test_cosine_basic():
@@ -220,3 +223,131 @@ def test_retinaface_threshold_boundary_and_empty_behavior():
     # Ảnh rỗng trong detect
     assert len(det.detect(None)) == 0
     assert len(det.detect(np.zeros((0, 0, 3), np.uint8))) == 0
+
+
+@pytest.mark.parametrize('angle', [0, 90, 180, 270])
+def test_upright_pixels_coordinates_and_compensation(angle, asymmetric_image, face_factory, engine_factory):
+    # Input is rotated counterclockwise; compensation must be clockwise.
+    source = np.rot90(asymmetric_image, angle // 90).copy()
+    face = face_factory()
+    eng = engine_factory(lambda img: [face] if np.array_equal(img, asymmetric_image) else [])
+    r = eng.extract(source, keep_aligned=True)
+    assert r.rotation_applied == angle
+    assert len(eng.detector.seen) == angle // 90 + 1
+    for i, seen in enumerate(eng.detector.seen):
+        np.testing.assert_array_equal(seen, np.rot90(source, -i))
+    np.testing.assert_array_equal(r.bbox, face.bbox)
+    np.testing.assert_array_equal(r.landmarks, face.kps)
+    assert np.all(np.array(r.landmarks) < [240, 160])
+    assert r.face_count == 1
+    assert r.aligned.shape == (112, 112, 3)
+    np.testing.assert_array_equal(r.aligned, align_face(asymmetric_image, face.kps))
+    np.testing.assert_array_equal(eng.recognizer.seen[0], r.aligned)
+    assert r.roll_degrees == pytest.approx(roll_angle_degrees(face.kps))
+
+
+def test_multiface_uses_area_times_score_and_filters_size(asymmetric_image, face_factory, engine_factory):
+    small = face_factory((0, 0, 39, 150), 1.0)
+    large = face_factory((0, 0, 100, 100), 0.5)  # 5000
+    main = face_factory((10, 10, 90, 90), 0.9)   # 5760
+    boundary = face_factory((0, 0, 40, 40), 0.9)
+    eng = engine_factory(lambda img: [small, large, main, boundary])
+    r = eng.extract(asymmetric_image)
+    assert r.face_count == 3 and r.rotation_applied == 0
+    assert r.det_score == main.score
+    np.testing.assert_array_equal(r.bbox, main.bbox)
+    assert len(eng.detector.seen) == 1 and r.aligned is None
+
+
+def test_small_face_does_not_stop_orientation_search(asymmetric_image, face_factory, engine_factory):
+    small, valid = face_factory((0, 0, 39, 100)), face_factory()
+    second = face_factory((0, 0, 40, 40))
+    eng = engine_factory(lambda img: [valid, second, small]
+                         if np.array_equal(img, asymmetric_image) else [small])
+    r = eng.extract(np.rot90(asymmetric_image).copy())
+    assert r.rotation_applied == 90 and r.face_count == 2
+    np.testing.assert_array_equal(r.bbox, valid.bbox)
+
+
+@pytest.mark.parametrize('too_small', [False, True])
+def test_all_orientations_without_valid_face(too_small, asymmetric_image, face_factory, engine_factory):
+    faces = [face_factory((0, 0, 100, 39))] if too_small else []
+    eng = engine_factory(lambda img: faces)
+    with pytest.raises(NoFaceError):
+        eng.extract(asymmetric_image)
+    assert len(eng.detector.seen) == 4
+    assert eng.recognizer.seen == []
+
+
+@pytest.mark.parametrize('orientation', [None, 1, 2, 3, 4, 5, 6, 7, 8])
+def test_decode_exif_exactly_once_and_local_file(orientation, jpeg_with_orientation, tmp_path):
+    data, expected = jpeg_with_orientation(orientation)
+    np.testing.assert_array_equal(decode_image(data), expected)
+    path = tmp_path / 'ảnh.jpg'
+    path.write_bytes(data)
+    np.testing.assert_array_equal(read_image(path), expected)
+
+
+@pytest.mark.parametrize('data', [b'', b'not an image'])
+def test_decode_invalid(data):
+    with pytest.raises(ValueError):
+        decode_image(data)
+
+
+@pytest.mark.parametrize('mirrored', [False, True])
+def test_alignment_preserves_image_handedness(mirrored):
+    # Exact template -> identity. Asymmetric pixels reveal accidental flipping.
+    img = np.random.RandomState(12).randint(0, 256, (112, 112, 3), np.uint8)
+    if mirrored:
+        img = img[:, ::-1].copy()
+    np.testing.assert_array_equal(align_face(img, ARCFACE_TEMPLATE), img)
+    matrix = umeyama_similarity(ARCFACE_TEMPLATE, ARCFACE_TEMPLATE)
+    assert np.linalg.det(matrix[:, :2]) > 0
+
+
+def test_alignment_maps_tilted_landmark_pixels():
+    import cv2
+    angle = np.radians(23)
+    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+    kps = 1.6 * ARCFACE_TEMPLATE @ rotation.T + [90, 30]
+    image = np.zeros((300, 300, 3), np.uint8)
+    for i, point in enumerate(kps):
+        cv2.circle(image, tuple(np.rint(point).astype(int)), 4, (30 + 40*i, 255, 100), -1)
+    aligned = align_face(image, kps)
+    assert aligned.shape == (112, 112, 3)
+    for point in ARCFACE_TEMPLATE:
+        x, y = np.rint(point).astype(int)
+        assert aligned[y-2:y+3, x-2:x+3, 1].max() > 200
+    assert roll_angle_degrees(kps) == pytest.approx(23 + roll_angle_degrees(ARCFACE_TEMPLATE))
+
+
+def test_alignment_of_mirrored_landmarks_keeps_reflection():
+    import cv2
+    # Mirror the pixels and reorder paired landmarks into image-left/right order,
+    # as a detector does; alignment must not undo the selfie's reflection.
+    img = np.zeros((224, 224, 3), np.uint8)
+    kps = ARCFACE_TEMPLATE * 2
+    for i, point in enumerate(kps):
+        cv2.circle(img, tuple(np.rint(point).astype(int)), 7, (20 + i*50, 200, 80), -1)
+    mirrored = img[:, ::-1].copy()
+    mirror_kps = kps.copy()
+    mirror_kps[:, 0] = 223 - mirror_kps[:, 0]
+    mirror_kps = mirror_kps[[1, 0, 2, 4, 3]]
+    matrix = umeyama_similarity(mirror_kps, ARCFACE_TEMPLATE)
+    assert np.linalg.det(matrix[:, :2]) > 0
+    aligned = align_face(mirrored, mirror_kps)
+    # Image-left eye now has the original image-right eye's marker color.
+    left, right = np.rint(ARCFACE_TEMPLATE[:2]).astype(int)
+    assert aligned[left[1], left[0], 0] > aligned[right[1], right[0], 0] + 30
+
+
+@pytest.mark.parametrize('kps', [
+    np.zeros((5, 2)), np.ones((4, 2)), np.full((5, 2), np.nan),
+    np.full((5, 2), np.inf), np.column_stack([np.arange(5), np.arange(5)]),
+    np.vstack([ARCFACE_TEMPLATE[0], ARCFACE_TEMPLATE[0], ARCFACE_TEMPLATE[2:]]),
+])
+def test_invalid_landmarks_fail_clearly(kps, asymmetric_image, face_factory, engine_factory):
+    eng = engine_factory(lambda img: [face_factory(kps=kps)])
+    with pytest.raises(AlignmentError, match='Landmark'):
+        eng.extract(asymmetric_image)
+    assert eng.recognizer.seen == []
