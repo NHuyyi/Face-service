@@ -58,3 +58,64 @@ def test_compare_identify_errors(client):
     assert client.post("/v1/faces", files={"file": ("w.png", png(255), "image/png")}).status_code == 422
     assert client.post("/v1/faces", files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 400
     assert client.post("/v1/faces/nope/match", files={"file": ("a.png", png(5), "image/png")}).status_code == 404
+
+
+@pytest.mark.parametrize('orientation', [None, 1, 2, 3, 4, 5, 6, 7, 8])
+def test_api_exif_pixels_and_face_coordinates(orientation, jpeg_with_orientation, face_factory, engine_factory):
+    data, expected = jpeg_with_orientation(orientation)
+    face = face_factory()
+    eng = engine_factory(lambda img: [face] if np.array_equal(img, expected) else [])
+    with TestClient(create_app(Settings(), eng, FaceStore(':memory:'))) as c:
+        response = c.post('/v1/embeddings', files={'file': ('exif.jpg', data, 'image/jpeg')})
+    assert response.status_code == 200
+    info = response.json()['face']
+    assert info['rotation_applied'] == 0  # EXIF is not counted as trial rotation.
+    assert info['face_count'] == 1
+    np.testing.assert_array_equal(info['bbox'], face.bbox)
+    np.testing.assert_array_equal(info['landmarks'], face.kps)
+    np.testing.assert_array_equal(eng.detector.seen[0], expected)
+    assert eng.recognizer.seen[0].shape == (112, 112, 3)
+
+
+@pytest.mark.parametrize('angle', [0, 90, 180, 270])
+def test_api_missing_exif_rotation(angle, asymmetric_image, face_factory, engine_factory):
+    source = np.rot90(asymmetric_image, angle // 90).copy()
+    ok, data = cv2.imencode('.png', source)
+    assert ok
+    face = face_factory()
+    eng = engine_factory(lambda img: [face] if np.array_equal(img, asymmetric_image) else [])
+    with TestClient(create_app(Settings(), eng, FaceStore(':memory:'))) as c:
+        response = c.post('/v1/embeddings', files={'file': ('no-exif.png', data.tobytes(), 'image/png')})
+    assert response.status_code == 200
+    assert response.json()['face']['rotation_applied'] == angle
+    np.testing.assert_array_equal(response.json()['face']['landmarks'], face.kps)
+
+
+def test_api_trial_rotation_is_relative_to_exif(jpeg_with_orientation, face_factory, engine_factory):
+    data, decoded = jpeg_with_orientation(6)  # EXIF itself applies 90 clockwise.
+    target = np.rot90(decoded, -1).copy()     # Detector needs a further 90.
+    main, other = face_factory(), face_factory((0, 0, 40, 40))
+    eng = engine_factory(lambda img: [main, other] if np.array_equal(img, target) else [])
+    with TestClient(create_app(Settings(), eng, FaceStore(':memory:'))) as c:
+        response = c.post('/v1/embeddings', files={'file': ('a.jpg', data, 'image/jpeg')})
+    assert response.status_code == 200
+    info = response.json()['face']
+    assert info['rotation_applied'] == 90 and info['face_count'] == 2
+    np.testing.assert_array_equal(info['bbox'], main.bbox)
+    np.testing.assert_array_equal(eng.detector.seen[-1], target)
+
+
+@pytest.mark.parametrize('kind', ['none', 'small', 'invalid_landmarks'])
+def test_real_engine_api_returns_422(kind, face_factory, engine_factory):
+    faces = {
+        'none': [],
+        'small': [face_factory((0, 0, 39, 60))],
+        'invalid_landmarks': [face_factory(kps=np.zeros((5, 2)))],
+    }[kind]
+    eng = engine_factory(lambda img: faces)
+    with TestClient(create_app(Settings(), eng, FaceStore(':memory:'))) as c:
+        response = c.post('/v1/embeddings', files={'file': ('a.png', png(10), 'image/png')})
+    assert response.status_code == 422
+    assert response.json()['detail']
+    assert len(eng.detector.seen) == (1 if kind == 'invalid_landmarks' else 4)
+    assert eng.recognizer.seen == []
