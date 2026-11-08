@@ -58,3 +58,50 @@ def test_compare_identify_errors(client):
     assert client.post("/v1/faces", files={"file": ("w.png", png(255), "image/png")}).status_code == 422
     assert client.post("/v1/faces", files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 400
     assert client.post("/v1/faces/nope/match", files={"file": ("a.png", png(5), "image/png")}).status_code == 404
+
+
+def test_api_key_auth():
+    """Kiểm tra cơ chế xác thực API Key """
+    app_with_key = create_app(Settings(api_key="secret123"), FakeEngine(), FaceStore(":memory:"))
+    with TestClient(app_with_key) as c:
+        # Không truyền key -> 401
+        r_no_key = c.post("/v1/faces", files={"file": ("a.png", png(10), "image/png")})
+        assert r_no_key.status_code == 401
+        assert "API key không hợp lệ" in r_no_key.text
+
+        # Sai key -> 401
+        r_wrong_key = c.post("/v1/faces", files={"file": ("a.png", png(10), "image/png")},
+                             headers={"X-API-Key": "wrong"})
+        assert r_wrong_key.status_code == 401
+
+        # Đúng key -> 200 OK
+        r_valid = c.post("/v1/faces", files={"file": ("a.png", png(10), "image/png")},
+                         headers={"X-API-Key": "secret123"})
+        assert r_valid.status_code == 200
+
+
+def test_ttl_api_expiration(monkeypatch):
+    """Kiểm tra tính năng lưu tạm time-to-live(TTL) qua API: hết hạn tự động trả về 404."""
+    import time
+    import app.db as dbmod
+
+    st = FaceStore(":memory:", ttl_seconds=10)
+    app = create_app(Settings(), FakeEngine(), st)
+    with TestClient(app) as c:
+        # Enroll ảnh -> sinh ID
+        r = c.post("/v1/faces", files={"file": ("a.png", png(10), "image/png")})
+        assert r.status_code == 200
+        face_id = r.json()["id"]
+
+        # Ngay sau đó gọi match -> thành công 200
+        assert c.post(f"/v1/faces/{face_id}/match", files={"file": ("b.png", png(10), "image/png")}).status_code == 200
+
+        # Giả lập thời gian trôi qua 15 giây (vượt quá TTL 10s)
+        t0 = time.time()
+        monkeypatch.setattr(dbmod.time, "time", lambda: t0 + 15)
+
+        # Gọi lại match sau khi hết hạn -> báo lỗi 404
+        r_expired = c.post(f"/v1/faces/{face_id}/match", files={"file": ("b.png", png(10), "image/png")})
+        assert r_expired.status_code == 404
+        assert "hết hạn" in r_expired.text
+
