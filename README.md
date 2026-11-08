@@ -91,6 +91,41 @@ curl -F file=@b.jpg http://localhost:8000/v1/faces/3f2c…/match
 
 Lỗi: `422` không thấy mặt, `400` ảnh hỏng, `413` ảnh quá lớn, `404` id không tồn tại/hết hạn, `401` sai API key.
 
+### Xoay ảnh, căn chỉnh và tọa độ kết quả
+
+API và `scripts/evaluate.py` dùng chung bộ giải mã byte → BGR
+(`app/engine/image.py`). OpenCV `IMREAD_COLOR` áp dụng EXIF orientation đúng một lần,
+bao gồm các hướng xoay và phản chiếu (1–8); không transpose EXIF thêm lần nữa.
+Ảnh không có EXIF giữ nguyên pixel khi giải mã và vẫn được thử xoay ở bước sau.
+Khi gọi trực tiếp `FaceEngine.extract`, đầu vào là mảng BGR đã giải mã/chuẩn hóa EXIF.
+
+Engine phát hiện trên ảnh đã giải mã trước (0°). Nếu không có mặt đạt
+`MIN_FACE_SIZE` ở cả chiều rộng và chiều cao, thử lần lượt 90°, 180°, 270°
+**theo chiều kim đồng hồ**, mỗi lần từ cùng ảnh đã giải mã. Dừng tại hướng đầu
+tiên có mặt hợp lệ; hết bốn hướng thì báo `NoFaceError` (API HTTP 422).
+Ở hướng được chọn, mặt chính có **diện tích bbox × điểm phát hiện** lớn nhất;
+`face_count` là số mặt đạt kích thước tại hướng đó, không cộng qua các hướng.
+
+- `rotation_applied`: góc xoay bù thực tế trong bước thử hướng (0/90/180/270°),
+  tính từ ảnh **sau EXIF**; không gồm biến đổi EXIF hoặc góc căn chỉnh landmark.
+  Ví dụ ảnh lệch 90° ngược chiều kim đồng hồ cần bù 90°; ảnh lệch 90° cùng chiều
+  kim đồng hồ cần bù 270°. EXIF đã đưa ảnh về đúng hướng thì giá trị thường là 0.
+- `roll_degrees`: góc đường nối mắt trái → mắt phải trên ảnh sau EXIF và xoay thử,
+  **trước** căn chỉnh. Dương khi mắt bên phải thấp hơn (trục y ảnh hướng xuống).
+  Đây không phải góc xoay bù và cũng không phải góc còn sót trên ảnh 112×112.
+- `bbox` (`x1,y1,x2,y2`) và `landmarks` (5 cặp `x,y`) thuộc ảnh **sau EXIF và
+  `rotation_applied`, trước crop/căn chỉnh**, không thuộc pixel gốc của file hay
+  ảnh 112×112. Gốc tọa độ ở trên trái, x sang phải, y xuống dưới; xoay 90°/270°
+  đổi chiều rộng/cao. Landmark theo thứ tự mắt trái/phải trên ảnh, mũi,
+  khóe miệng trái/phải trên ảnh.
+
+Căn chỉnh dùng đủ 5 landmark với similarity transform (xoay, tỉ lệ đều,
+tịnh tiến) về template ArcFace **112×112**. Phép biến đổi giữ chiều ảnh,
+không tự lật gương mọi ảnh; ảnh selfie lật gương không có EXIF phản chiếu vẫn
+giữ chiều lật của nó. Landmark sai số điểm, NaN/Inf, trùng/thẳng hàng hoặc
+phép biến đổi suy biến phát sinh `AlignmentError` với thông báo cụ thể
+(API HTTP 422; evaluate ghi lý do và bỏ qua).
+
 ## 5. Thử nghiệm matching hàng loạt
 
 ```bash
@@ -127,3 +162,9 @@ Phía Android chỉ cần gửi ảnh (multipart) và đọc `match`/`similarity
 ```bash
 pytest -q        # logic lõi + API (engine giả, không cần model)
 ```
+
+Test hướng ảnh dùng detector/recognizer giả, JPEG gắn EXIF thật đủ 8 hướng,
+ảnh bất đối xứng để phát hiện lật/xoay hai lần, và ảnh nghiêng có mốc landmark.
+Các test này xác minh luồng xử lý, tọa độ và đầu ra 112×112; không đánh giá
+khả năng phát hiện/nhận diện thực tế của model ONNX. Để kiểm tra với ảnh thật,
+cần model trong `models/` và dataset thực, rồi chạy `scripts/evaluate.py` như mục 5.
