@@ -18,12 +18,13 @@ import itertools
 import os
 import sys
 
-import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import Settings  # noqa: E402
 from app.engine import FaceEngine, NoFaceError  # noqa: E402
+from app.engine.align import AlignmentError  # noqa: E402
+from app.engine.image import read_image  # noqa: E402
 from app.matching import batch_cosine_similarity  # noqa: E402
 
 EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
@@ -55,14 +56,18 @@ def main():
 
     names, labels, vecs = [], [], []
     for person, path in load_dataset(a.dataset):
-        img = cv2.imread(path)
-        if img is None:
+        try:
+            img = read_image(path)
+        except (OSError, ValueError):
             print(f"[bỏ qua] không đọc được {path}")
             continue
         try:
             r = eng.extract(img)
         except NoFaceError:
             print(f"[bỏ qua] không thấy mặt: {path}")
+            continue
+        except AlignmentError as e:
+            print(f"[bỏ qua] không căn chỉnh được {path}: {e}")
             continue
         names.append(os.path.relpath(path, a.dataset)); labels.append(person); vecs.append(r.embedding)
         print(f"ok  {names[-1]:40s} rot={r.rotation_applied:3d} roll={r.roll_degrees:6.1f} score={r.det_score:.2f}")
