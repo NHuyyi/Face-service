@@ -1,0 +1,41 @@
+metric_name,reported_value,source_file,source_columns,calculation_formula,verification_status
+"RetinaFace Preprocessing Mean","11.79 ms","raw_timing.csv","rf_pre_ms","mean(rf_pre_ms)",VERIFIED
+"RetinaFace Preprocessing Median","11.71 ms","raw_timing.csv","rf_pre_ms","median(rf_pre_ms)",VERIFIED
+"RetinaFace Preprocessing P95","15.46 ms","raw_timing.csv","rf_pre_ms","percentile(rf_pre_ms, 95)",VERIFIED
+"RetinaFace Preprocessing Std","3.47 ms","raw_timing.csv","rf_pre_ms","std(rf_pre_ms)",VERIFIED
+"RetinaFace Inference Mean","361.96 ms","raw_timing.csv","rf_infer_ms","mean(rf_infer_ms)",VERIFIED
+"RetinaFace Inference Median","379.47 ms","raw_timing.csv","rf_infer_ms","median(rf_infer_ms)",VERIFIED
+"RetinaFace Inference P95","447.51 ms","raw_timing.csv","rf_infer_ms","percentile(rf_infer_ms, 95)",VERIFIED
+"RetinaFace Inference Std","68.02 ms","raw_timing.csv","rf_infer_ms","std(rf_infer_ms)",VERIFIED
+"RetinaFace Postprocessing Mean","1.41 ms","raw_timing.csv","rf_post_ms","mean(rf_post_ms)",VERIFIED
+"RetinaFace Total Latency Mean","375.15 ms","raw_timing.csv","rf_total_ms","mean(rf_total_ms)",VERIFIED
+"RetinaFace Total Latency Median","392.74 ms","raw_timing.csv","rf_total_ms","median(rf_total_ms)",VERIFIED
+"RetinaFace Total Latency P95","467.98 ms","raw_timing.csv","rf_total_ms","percentile(rf_total_ms, 95)",VERIFIED
+"RetinaFace Sequential FPS","2.67 FPS","raw_timing.csv","rf_total_ms","1000.0 / mean(rf_total_ms)",VERIFIED
+"SCRFD Preprocessing Mean","13.38 ms","raw_timing.csv","sc_pre_ms","mean(sc_pre_ms)",VERIFIED
+"SCRFD Preprocessing Median","13.02 ms","raw_timing.csv","sc_pre_ms","median(sc_pre_ms)",VERIFIED
+"SCRFD Preprocessing P95","19.40 ms","raw_timing.csv","sc_pre_ms","percentile(sc_pre_ms, 95)",VERIFIED
+"SCRFD Preprocessing Std","4.12 ms","raw_timing.csv","sc_pre_ms","std(sc_pre_ms)",VERIFIED
+"SCRFD Inference Mean","114.13 ms","raw_timing.csv","sc_infer_ms","mean(sc_infer_ms)",VERIFIED
+"SCRFD Inference Median","117.86 ms","raw_timing.csv","sc_infer_ms","median(sc_infer_ms)",VERIFIED
+"SCRFD Inference P95","144.18 ms","raw_timing.csv","sc_infer_ms","percentile(sc_infer_ms, 95)",VERIFIED
+"SCRFD Inference Std","22.28 ms","raw_timing.csv","sc_infer_ms","std(sc_infer_ms)",VERIFIED
+"SCRFD Postprocessing Mean","10.40 ms","raw_timing.csv","sc_post_ms","mean(sc_post_ms)",VERIFIED
+"SCRFD Total Latency Mean","137.91 ms","raw_timing.csv","sc_total_ms","mean(sc_total_ms)",VERIFIED
+"SCRFD Total Latency Median","141.19 ms","raw_timing.csv","sc_total_ms","median(sc_total_ms)",VERIFIED
+"SCRFD Total Latency P95","184.59 ms","raw_timing.csv","sc_total_ms","percentile(sc_total_ms, 95)",VERIFIED
+"SCRFD Sequential FPS","7.25 FPS","raw_timing.csv","sc_total_ms","1000.0 / mean(sc_total_ms)",VERIFIED
+"RetinaFace Easy AP","0.9318","pred/retinaface/ & subset_manifest.jsonl","pred files & easy_valid GT","voc_ap(rec, prec)",VERIFIED
+"RetinaFace Medium AP","0.9059","pred/retinaface/ & subset_manifest.jsonl","pred files & medium_valid GT","voc_ap(rec, prec)",VERIFIED
+"RetinaFace Hard AP","0.6665","pred/retinaface/ & subset_manifest.jsonl","pred files & hard_valid GT","voc_ap(rec, prec)",VERIFIED
+"SCRFD Easy AP","0.9470","pred/scrfd/ & subset_manifest.jsonl","pred files & easy_valid GT","voc_ap(rec, prec)",VERIFIED
+"SCRFD Medium AP","0.9364","pred/scrfd/ & subset_manifest.jsonl","pred files & medium_valid GT","voc_ap(rec, prec)",VERIFIED
+"SCRFD Hard AP","0.8599","pred/scrfd/ & subset_manifest.jsonl","pred files & hard_valid GT","voc_ap(rec, prec)",VERIFIED
+"Inference Speedup Ratio","3.17x","benchmark_summary.json","infer_ms","rf_infer_mean / sc_infer_mean",VERIFIED
+"Total Latency Ratio","2.72x","benchmark_summary.json","total_ms","rf_total_mean / sc_total_mean",VERIFIED
+"Warmup Exclusion","Excluded","run_subset_200.py","N/A","warmup_detectors executed prior to loop",VERIFIED
+"Dataset Sample Uniformity","200/200 shared","selected_images_manifest.csv","image_id","Same 200 images evaluated for both models",VERIFIED
+"SCRFD Production Latency (~125ms @ 0.5)","Unmeasured hypothesis","benchmark_report_vi.md section 5.2","None","Extrapolation from low NMS time, not benchmarked",UNVERIFIED
+"GPU/NPU Advantage Claim","Unmeasured literature claim","benchmark_report_vi.md section 7","None","Literature context only, not tested on CPU",UNVERIFIED
+"Landmark Accuracy Superiority","Unmeasured literature claim","benchmark_report_vi.md section 7","None","No NME/CED landmark evaluation performed",UNVERIFIED
+

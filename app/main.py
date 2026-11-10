@@ -6,8 +6,9 @@ from contextlib import asynccontextmanager
 from typing import List, Optional
 
 import numpy as np
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Security, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 
 from .config import Settings
 from .db import FaceStore
@@ -45,9 +46,11 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
     app = FastAPI(title="Face Recognition Service", version="1.0.0", lifespan=lifespan)
 
     # ---- dependencies -------------------------------------------------------------
-    def check_key(request: Request):
+    api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+    def check_key(request: Request, key_header: Optional[str] = Security(api_key_header)):
         key = request.app.state.settings.api_key
-        if key and request.headers.get("X-API-Key") != key:
+        if key and key_header != key:
             raise HTTPException(401, "API key không hợp lệ")
 
     def get_engine(request: Request):

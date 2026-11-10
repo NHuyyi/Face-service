@@ -157,6 +157,32 @@ Vector cũ (192-d) và mới (512-d) **không so sánh được với nhau** –
 enroll lại ảnh sinh viên đã có (gửi ảnh lên `POST /v1/faces`, lưu `id` thay cho vector 192-d trong SQLite của app).
 Phía Android chỉ cần gửi ảnh (multipart) và đọc `match`/`similarity` từ JSON.
 
+## 2. Chạy Service
+
+### Cách 1: Chạy bằng Docker
+Tất cả cấu hình (TTL 300s, API Key, Model RetinaFace/SCRFD) đã được thiết lập sẵn trong `docker-compose.yml`:
+```bash
+docker compose up --build -d
+```
+
+### Cách 2: Chạy trực tiếp bằng Python Uvicorn (Phát triển & Test)
+
+**Trên Windows (PowerShell):**
+```powershell
+$env:DETECTOR_BACKEND="retinaface"; $env:API_KEY="my-secret-key-2026"; $env:VECTOR_TTL_SECONDS="300"; python -m uvicorn app.main:app --port 8000 --reload
+```
+
+**Trên Linux / macOS:**
+```bash
+DETECTOR_BACKEND=retinaface API_KEY=my-secret-key-2026 VECTOR_TTL_SECONDS=300 uvicorn app.main:app --port 8000 --reload
+```
+
+> **Ghi chú các tham số cấu hình:**
+> - `DETECTOR_BACKEND=retinaface`: Dùng model phát hiện RetinaFace (hoặc đổi thành `scrfd` nếu dùng SCRFD có sẵn trong `models/`).
+> - `API_KEY=my-secret-key-2026`: Bật khoá bảo mật (yêu cầu truyền header `X-API-Key`).
+> - `VECTOR_TTL_SECONDS=300`: Tự động giải phóng/xoá vector khỏi SQLite sau 5 phút (lưu tạm thời).
+
+
 ## 8. Test
 
 ```bash

@@ -1,5 +1,29 @@
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+
+# Data and reports
 data/
 report/
+
+# ONNX models
 models/*.onnx
-.venv/ 
+
+# Datasets
+datasets/
+*.zip
+*.tmp
+
+# Benchmark artifacts: ignore everything by default
+/artifacts/*
+
+# Keep final benchmark report only
+!/artifacts/benchmark/
+/artifacts/benchmark/*
+!/artifacts/benchmark/widerface/
+/artifacts/benchmark/widerface/*
+!/artifacts/benchmark/widerface/subset_200/
+/artifacts/benchmark/widerface/subset_200/*
+!/artifacts/benchmark/widerface/subset_200/final_report/
+!/artifacts/benchmark/widerface/subset_200/final_report/**
