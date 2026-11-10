@@ -31,12 +31,12 @@ class NoFaceError(Exception):
 @dataclass
 class FaceResult:
     embedding: np.ndarray       # (512,) float32, L2-normalized
-    bbox: List[float]           # trên ảnh sau khi đã xoay thẳng
+    bbox: List[float]           # ảnh sau EXIF + xoay thử, trước crop/alignment
     landmarks: List[List[float]]
     det_score: float
     face_count: int
-    rotation_applied: int       # 0/90/180/270: góc xoay ảnh để mặt thẳng đứng
-    roll_degrees: float         # độ nghiêng còn lại đã được căn thẳng bằng landmark
+    rotation_applied: int       # 0/90/180/270 chiều kim đồng hồ, sau EXIF
+    roll_degrees: float         # góc đường nối hai mắt trước alignment, sau xoay thử
     aligned: Optional[np.ndarray] = None  # ảnh mặt 112x112 (BGR)
 
 
@@ -56,7 +56,12 @@ class FaceEngine:
         self.recognizer = ArcFaceRecognizer(os.path.join(d, settings.arcface_model), providers)
 
     # -- phát hiện + xoay thẳng ảnh -----------------------------------------------------
-    def _detect_upright(self, img: np.ndarray):
+    def _detect_upright(self, img: np.ndarray) -> tuple[np.ndarray, List[DetectedFace], int]:
+        """First size-valid orientation, clockwise relative to EXIF-decoded pixels.
+
+        Detect on each rotated candidate, so boxes/landmarks already refer to
+        that candidate. Each rotation starts from img, never the last candidate.
+        """
         for angle, code in _ROTATIONS:
             cand = img if code is None else cv2.rotate(img, code)
             faces = [f for f in self.detector.detect(cand) if f.size >= self.s.min_face_size]
@@ -66,7 +71,7 @@ class FaceEngine:
 
     @staticmethod
     def _pick_main(faces: List[DetectedFace]) -> DetectedFace:
-        # Mặt lớn nhất, ưu tiên điểm cao
+        # Chọn theo diện tích nhân điểm phát hiện ở hướng đầu tiên hợp lệ.
         return max(faces, key=lambda f: f.area * f.score)
 
     def extract(self, img_bgr: np.ndarray, keep_aligned: bool = False) -> FaceResult:

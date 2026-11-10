@@ -104,4 +104,3 @@ def test_ttl_api_expiration(monkeypatch):
         r_expired = c.post(f"/v1/faces/{face_id}/match", files={"file": ("b.png", png(10), "image/png")})
         assert r_expired.status_code == 404
         assert "hết hạn" in r_expired.text
-

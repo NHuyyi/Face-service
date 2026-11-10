@@ -7,9 +7,9 @@ import numpy as np
 
 @dataclass
 class DetectedFace:
-    bbox: np.ndarray       # (4,) x1,y1,x2,y2 theo toạ độ ảnh gốc
+    bbox: np.ndarray       # (4,) x1,y1,x2,y2 trên ảnh đầu vào detector (đã xoay nếu có)
     score: float
-    kps: np.ndarray        # (5,2): mắt trái, mắt phải, mũi, khoé miệng trái, khoé miệng phải
+    kps: np.ndarray        # (5,2): mắt trái/phải trên ảnh, mũi, miệng trái/phải trên ảnh
 
     @property
     def area(self) -> float:

@@ -5,7 +5,6 @@ import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-import cv2
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Security, UploadFile
 from fastapi.responses import JSONResponse
@@ -14,6 +13,8 @@ from fastapi.security import APIKeyHeader
 from .config import Settings
 from .db import FaceStore
 from .engine import FaceEngine, FaceResult, NoFaceError
+from .engine.align import AlignmentError
+from .engine.image import decode_image
 from .matching import EMBEDDING_DIM, batch_cosine_similarity, cosine_similarity, is_match
 from .schemas import (EmbeddingResponse, EnrollResponse, FaceInfo, FaceSummary, IdentifyCandidate,
                       IdentifyResponse, MatchResponse)
@@ -67,16 +68,15 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
             raise HTTPException(400, "File ảnh rỗng")
         if len(data) > cfg.max_upload_mb * 1024 * 1024:
             raise HTTPException(413, f"Ảnh vượt quá {cfg.max_upload_mb} MB")
-        # imdecode tự áp dụng EXIF orientation
-        img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-        if img is None:
-            raise HTTPException(400, "Không đọc được ảnh (định dạng không hỗ trợ)")
-        return img
+        try:
+            return decode_image(data)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
 
     def run_extract(eng, img: np.ndarray) -> FaceResult:
         try:
             return eng.extract(img)
-        except NoFaceError as e:
+        except (NoFaceError, AlignmentError) as e:
             raise HTTPException(422, str(e))
 
     # ---- endpoints ----------------------------------------------------------------
