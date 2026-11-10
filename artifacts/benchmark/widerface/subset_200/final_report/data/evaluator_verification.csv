@@ -1,0 +1,11 @@
+rule_item,matlab_reference_file,python_implementation_location,classification,evidence_summary
+"GT ignore semantics (1=valid, 0=ignored)","evaluation.m (eval_tools.zip)","evaluator.py: lines 52-66, 243-250",VERIFIED,"Mảng ignore gán keep_index=1; khi match hộp ignore=0 thì proposal_list=-1 và recall_list=-1 (trung hoà, không tính FP)"
+"IoU calculation (+1 rule)","boxoverlap.m (eval_tools.zip)","evaluator.py: lines 27-40",VERIFIED,"Áp dụng chuẩn Fast R-CNN/VOC: w = x2 - x1 + 1, h = y2 - y1 + 1, diện tích +1, gán 0 khi w<=0 hoặc h<=0"
+"Global score normalization","norm_score.m (eval_tools.zip)","evaluator.py: lines 201-222",VERIFIED,"Tìm min_score và max_score toàn cục trên mọi ảnh/sự kiện trước khi chuẩn hoá tuyến tính về [0, 1]"
+"Behavior when max_score == min_score","norm_score.m (không xử lý, gây NaN)","evaluator.py: lines 212-214",DIFFERENT,"Bản gốc MATLAB chia cho 0 gây NaN/Inf; bản Python bổ sung chốt an toàn diff=1.0 khi diff<=1e-12 để tránh crash"
+"Exact 1000-threshold generation","evaluation.m (eval_tools.zip)","evaluator.py: line 79",VERIFIED,"Công thức thresh = 1.0 - (t+1)/1000 cho t từ 0..999, dùng searchsorted tìm phần tử cuối >= thresh"
+"VOC AP precision envelope integration","plot/VOCap.m (eval_tools.zip)","evaluator.py: lines 99-106",VERIFIED,"Dựng đường bao đơn điệu phải mpre[i]=max(mpre[i], mpre[i+1]) và tính tổng diện tích hình thang chính xác"
+"Prediction sorting and input format","read_pred.m (eval_tools.zip)","runner.py & evaluator.py",VERIFIED,"Ghi và đọc định dạng [img_name, N, x y w h score] với thứ tự sắp xếp giảm dần theo điểm tin cậy"
+"Handling of invalid-size and ignored GT","evaluation.m (eval_tools.zip)","evaluator.py: lines 243-250",VERIFIED,"Không tuỳ tiện lọc bỏ box có w<=2 hoặc h<=2; giữ nguyên toàn bộ GT gốc và quản lý qua cờ setting-specific keep_index"
+"Bit-exact MATLAB numerical equivalence","N/A (yêu cầu chạy đối đầu song song)","scripts/benchmark/evaluator.py",UNVERIFIED,"Thuật toán khớp 100% về mặt toán học nhưng chưa chạy đối đầu song song với MATLAB runtime chính thức"
+

@@ -1,12 +1,15 @@
 services:
   face-service:
     build: .
-    ports: ["8000:8000"]
+    container_name: face-recognition-service
+    restart: always
+    ports:
+      - "8000:8000"
     environment:
-      DETECTOR_BACKEND: retinaface      # hoặc scrfd
+      DETECTOR_BACKEND: retinaface           # scrfd hoặc retinaface
       MATCH_THRESHOLD: "0.40"
-      # API_KEY: change-me
-      # VECTOR_TTL_SECONDS: "3600"
+      VECTOR_TTL_SECONDS: "300"         # Lưu tạm thời vector trong 300s (5 phút)
+      API_KEY: "my-secret-key-2026"                       # chuối khoá bí mật
     volumes:
-      - ./models:/srv/models:ro
-      - ./data:/srv/data
+      - ./models:/srv/models:ro         # Mount thư mục model vào container
+      - ./data:/srv/data                # Mount thư mục CSDL SQLite lưu vector
