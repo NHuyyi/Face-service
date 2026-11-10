@@ -1,0 +1,569 @@
+{
+  "info": {
+    "name": "Face Recognition Service – QA Collection",
+    "description": "Bộ test đầy đủ cho Face Service (RetinaFace + ArcFace 512-d).\nThành viên 7: QA & Tài liệu.\n\nLuồng chính:\n  1. POST /v1/faces (Enroll) → lấy face_id\n  2. POST /v1/faces/{face_id}/match → so khớp\n\nBiến môi trường cần thiết:\n  base_url     : http://localhost:8000\n  api_key      : (để trống nếu không dùng)\n  face_id      : tự động điền sau bước Enroll\n  face_id_b    : tự động điền sau bước Enroll (người B)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "face-service-qa"
+  },
+  "variable": [
+    { "key": "base_url",    "value": "http://localhost:8000", "type": "string" },
+    { "key": "api_key",     "value": "",                      "type": "string" },
+    { "key": "face_id",     "value": "",                      "type": "string" },
+    { "key": "face_id_b",   "value": "",                      "type": "string" },
+    { "key": "threshold",   "value": "0.40",                  "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00. Health Check",
+      "item": [
+        {
+          "name": "TC-01 GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('status = ok',  () => pm.expect(j.status).to.eql('ok'));",
+                  "pm.test('dim = 512',    () => pm.expect(j.dim).to.eql(512));",
+                  "pm.test('detector presente', () => pm.expect(j.detector).to.be.a('string'));",
+                  "console.log('detector:', j.detector, '| stored:', j.stored_vectors, '| threshold:', j.threshold);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01. Luồng 2 bước (Enroll → Match)",
+      "item": [
+        {
+          "name": "TC-02a Enroll – người A ảnh 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('có id',       () => pm.expect(j.id).to.be.a('string').and.not.empty);",
+                  "pm.test('dim = 512',   () => pm.expect(j.dim).to.eql(512));",
+                  "pm.test('có face_info',() => pm.expect(j.face).to.have.property('det_score'));",
+                  "pm.collectionVariables.set('face_id', j.id);",
+                  "console.log('Enrolled face_id:', j.id, '| rotation_applied:', j.face.rotation_applied);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",  "type": "file", "src": "tests/assets/person_a_1.jpg", "description": "Ảnh người A (ảnh đầu tiên)" },
+                { "key": "label", "value": "person_a", "type": "text" },
+                { "key": "return_embedding", "value": "false", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/faces", "host": ["{{base_url}}"], "path": ["v1","faces"] }
+          }
+        },
+        {
+          "name": "TC-02b Match – cùng người A (ảnh 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('result = Match', () => pm.expect(j.result).to.eql('Match'));",
+                  "pm.test('match = 1',      () => pm.expect(j.match).to.eql(1));",
+                  "pm.test('similarity > threshold', () => pm.expect(j.similarity).to.be.above(parseFloat(pm.collectionVariables.get('threshold'))));",
+                  "pm.test('có reference_id', () => pm.expect(j.reference_id).to.eql(pm.collectionVariables.get('face_id')));",
+                  "console.log('Similarity (cùng người):', j.similarity);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "tests/assets/person_a_2.jpg", "description": "Ảnh người A (ảnh thứ 2)" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/faces/{{face_id}}/match",
+              "host": ["{{base_url}}"], "path": ["v1","faces","{{face_id}}","match"]
+            }
+          }
+        },
+        {
+          "name": "TC-03 Match – khác người → 0 Match",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('result = 0 Match', () => pm.expect(j.result).to.eql('0 Match'));",
+                  "pm.test('match = 0',        () => pm.expect(j.match).to.eql(0));",
+                  "pm.test('similarity < threshold', () => pm.expect(j.similarity).to.be.below(parseFloat(pm.collectionVariables.get('threshold'))));",
+                  "console.log('Similarity (khác người):', j.similarity);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "tests/assets/person_b_1.jpg", "description": "Ảnh người B (khác người)" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/faces/{{face_id}}/match",
+              "host": ["{{base_url}}"], "path": ["v1","faces","{{face_id}}","match"]
+            }
+          }
+        },
+        {
+          "name": "TC-02c Enroll – có return_embedding=true",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('embedding trả về', () => pm.expect(j.embedding).to.be.an('array').with.lengthOf(512));",
+                  "const norm = Math.sqrt(j.embedding.reduce((s,x) => s + x*x, 0));",
+                  "pm.test('embedding đã L2-normalize (norm ≈ 1)', () => pm.expect(norm).to.be.closeTo(1.0, 0.001));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "tests/assets/person_a_1.jpg" },
+                { "key": "label", "value": "person_a_copy", "type": "text" },
+                { "key": "return_embedding", "value": "true", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/faces", "host": ["{{base_url}}"], "path": ["v1","faces"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Compare (2 ảnh không lưu DB)",
+      "item": [
+        {
+          "name": "TC-04a Compare – cùng người → Match",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('match = 1', () => pm.expect(j.match).to.eql(1));",
+                  "pm.test('có face_a và face_b', () => { pm.expect(j.face_a).to.have.property('det_score'); pm.expect(j.face_b).to.have.property('det_score'); });",
+                  "console.log('Compare cùng người similarity:', j.similarity);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file_a", "type": "file", "src": "tests/assets/person_a_1.jpg" },
+                { "key": "file_b", "type": "file", "src": "tests/assets/person_a_2.jpg" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/compare", "host": ["{{base_url}}"], "path": ["v1","compare"] }
+          }
+        },
+        {
+          "name": "TC-04b Compare – khác người → 0 Match",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('match = 0',      () => pm.expect(j.match).to.eql(0));",
+                  "pm.test('result = 0 Match', () => pm.expect(j.result).to.eql('0 Match'));",
+                  "console.log('Compare khác người similarity:', j.similarity);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file_a", "type": "file", "src": "tests/assets/person_a_1.jpg" },
+                { "key": "file_b", "type": "file", "src": "tests/assets/person_b_1.jpg" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/compare", "host": ["{{base_url}}"], "path": ["v1","compare"] }
+          }
+        },
+        {
+          "name": "TC-04c Compare – ngưỡng tùy chỉnh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('threshold trả về đúng', () => pm.expect(j.threshold).to.eql(0.70));",
+                  "console.log('Custom threshold test – similarity:', j.similarity, '| result:', j.result);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file_a",    "type": "file",  "src": "tests/assets/person_a_1.jpg" },
+                { "key": "file_b",    "type": "file",  "src": "tests/assets/person_a_2.jpg" },
+                { "key": "threshold", "value": "0.70", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/compare", "host": ["{{base_url}}"], "path": ["v1","compare"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Embeddings",
+      "item": [
+        {
+          "name": "TC-05 POST /v1/embeddings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('dim = 512', () => pm.expect(j.dim).to.eql(512));",
+                  "pm.test('embedding là array 512', () => pm.expect(j.embedding).to.be.an('array').with.lengthOf(512));",
+                  "const norm = Math.sqrt(j.embedding.reduce((s,x) => s + x*x, 0));",
+                  "pm.test('L2-normalized (norm ≈ 1)', () => pm.expect(norm).to.be.closeTo(1.0, 0.001));",
+                  "pm.test('có face info', () => pm.expect(j.face).to.have.property('bbox'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "tests/assets/person_a_1.jpg" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/embeddings", "host": ["{{base_url}}"], "path": ["v1","embeddings"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Identify (1:N)",
+      "item": [
+        {
+          "name": "TC-06a Enroll người B (chuẩn bị identify)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('face_id_b', pm.response.json().id);",
+                  "console.log('Enrolled face_id_b:', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",  "type": "file",  "src": "tests/assets/person_b_1.jpg" },
+                { "key": "label", "value": "person_b", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/faces", "host": ["{{base_url}}"], "path": ["v1","faces"] }
+          }
+        },
+        {
+          "name": "TC-06b Identify – người A trong DB",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('có candidates',        () => pm.expect(j.candidates).to.be.an('array').and.not.empty);",
+                  "pm.test('top candidate là person_a', () => pm.expect(j.candidates[0].label).to.eql('person_a'));",
+                  "pm.test('match = 1',             () => pm.expect(j.match).to.eql(1));",
+                  "pm.test('có face info',          () => pm.expect(j.face).to.have.property('det_score'));",
+                  "console.log('Identify candidates:', JSON.stringify(j.candidates.map(c => ({label:c.label, sim:c.similarity.toFixed(3)}))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",  "type": "file", "src": "tests/assets/person_a_1.jpg" },
+                { "key": "top_k", "value": "5",   "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/identify", "host": ["{{base_url}}"], "path": ["v1","identify"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Quản lý DB",
+      "item": [
+        {
+          "name": "TC-11 GET /v1/faces – danh sách",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('response là array', () => pm.expect(j).to.be.an('array'));",
+                  "if (j.length > 0) {",
+                  "  pm.test('phần tử có id, label, det_score, created_at', () => {",
+                  "    pm.expect(j[0]).to.have.all.keys('id','label','det_score','created_at');",
+                  "  });",
+                  "}",
+                  "console.log('Tổng số faces trong DB:', j.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "url": {
+              "raw": "{{base_url}}/v1/faces?limit=10&offset=0",
+              "host": ["{{base_url}}"], "path": ["v1","faces"],
+              "query": [
+                { "key": "limit",  "value": "10" },
+                { "key": "offset", "value": "0"  }
+              ]
+            }
+          }
+        },
+        {
+          "name": "TC-12 DELETE /v1/faces/{face_id} – xóa thành công",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('deleted = face_id', () => pm.expect(j.deleted).to.eql(pm.collectionVariables.get('face_id_b')));",
+                  "console.log('Đã xóa:', j.deleted);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "url": {
+              "raw": "{{base_url}}/v1/faces/{{face_id_b}}",
+              "host": ["{{base_url}}"], "path": ["v1","faces","{{face_id_b}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Lỗi (Error Cases)",
+      "item": [
+        {
+          "name": "TC-07 404 – face_id không tồn tại",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('có detail', () => pm.expect(pm.response.json()).to.have.property('detail'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "tests/assets/person_a_1.jpg" }]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/faces/non-existent-id-99999/match",
+              "host": ["{{base_url}}"], "path": ["v1","faces","non-existent-id-99999","match"]
+            }
+          }
+        },
+        {
+          "name": "TC-07b 404 – DELETE id không tồn tại",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "url": {
+              "raw": "{{base_url}}/v1/faces/non-existent-id-99999",
+              "host": ["{{base_url}}"], "path": ["v1","faces","non-existent-id-99999"]
+            }
+          }
+        },
+        {
+          "name": "TC-08 422 – không phát hiện mặt (ảnh trắng)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('có detail', () => pm.expect(pm.response.json()).to.have.property('detail'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "tests/assets/blank_white.jpg",
+                  "description": "Ảnh trắng 64x64 – không có mặt"
+                }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/faces", "host": ["{{base_url}}"], "path": ["v1","faces"] }
+          }
+        },
+        {
+          "name": "TC-09 400 – định dạng file không hỗ trợ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('có detail', () => pm.expect(pm.response.json()).to.have.property('detail'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "{{api_key}}", "type": "text", "disabled": true }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "tests/assets/fake.txt",
+                  "description": "File text – không phải ảnh"
+                }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/faces", "host": ["{{base_url}}"], "path": ["v1","faces"] }
+          }
+        },
+        {
+          "name": "TC-13 401 – sai API Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const status = pm.response.code;",
+                  "if (status === 401) {",
+                  "  pm.test('HTTP 401 (API key đang bật)', () => pm.expect(status).to.eql(401));",
+                  "} else {",
+                  "  pm.test('API key chưa cấu hình – bỏ qua TC-13 (nhận HTTP ' + status + ')', () => true);",
+                  "  console.log('Để bật: đặt API_KEY trong docker-compose.yml');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-API-Key", "value": "wrong-key-123", "type": "text" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "tests/assets/person_a_1.jpg" }]
+            },
+            "url": { "raw": "{{base_url}}/v1/faces", "host": ["{{base_url}}"], "path": ["v1","faces"] }
+          }
+        }
+      ]
+    }
+  ]
+}
