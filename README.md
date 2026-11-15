@@ -194,3 +194,26 @@ Test hướng ảnh dùng detector/recognizer giả, JPEG gắn EXIF thật đ�
 Các test này xác minh luồng xử lý, tọa độ và đầu ra 112×112; không đánh giá
 khả năng phát hiện/nhận diện thực tế của model ONNX. Để kiểm tra với ảnh thật,
 cần model trong `models/` và dataset thực, rồi chạy `scripts/evaluate.py` như mục 5.
+
+## 9. Kiểm tra ảnh và khuôn mặt (`app/validation`)
+
+Module độc lập, chưa tự động áp dụng vào các endpoint hiện tại.
+
+| Hàm | Công nghệ | Kết quả khi đạt |
+|---|---|---|
+| `validate_image(source)` | OpenCV | Mảng ảnh BGR uint8; nhận bytes hoặc đường dẫn |
+| `detect_face(image, detector=None)` | RetinaFace ONNX | Danh sách khuôn mặt; lỗi nếu không thấy mặt |
+| `check_face_count(faces)` | NumPy | Số `1`; lỗi nếu số mặt khác 1 |
+| `check_blur(image, threshold=100)` | OpenCV | Phương sai Laplacian; lỗi nếu nhỏ hơn ngưỡng |
+| `check_brightness(image, minimum=40, maximum=220)` | OpenCV | Độ sáng xám trung bình; lỗi nếu ngoài khoảng |
+
+RetinaFace dùng `MODELS_DIR`, `RETINAFACE_MODEL`, `ORT_PROVIDERS`,
+`DET_SCORE_THRESHOLD`, `DET_NMS_THRESHOLD`, `DET_INPUT_SIZE` từ cấu hình dự án.
+Cần model RetinaFace ONNX trước khi gọi `detect_face`; lỗi tải/chạy model được
+giữ nguyên để phân biệt với ảnh không đạt. Không cần model ArcFace.
+
+Các mặt vượt ngưỡng detector đều được đếm, không bỏ mặt nhỏ trước khi đếm.
+Hàm phát hiện không thử các hướng xoay; tọa độ thuộc ảnh truyền vào.
+Độ mờ và độ sáng đo trên toàn ảnh ở độ phân giải gốc, không riêng vùng mặt.
+Ngưỡng mặc định là điểm khởi đầu, cần hiệu chỉnh trên ảnh thực tế;
+độ sắc nét phụ thuộc độ phân giải và nội dung ảnh. Giá trị bằng ngưỡng vẫn đạt.
