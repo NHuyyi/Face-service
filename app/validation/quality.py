@@ -10,11 +10,6 @@ import numpy as np
 from ..engine.types import DetectedFace
 
 
-from .image import validate_image
-from .detection import detect_face
-from .geometry import check_face_size, check_face_pose
-from ..engine.align import align_face
-
 class ImageQualityError(ValueError):
     """Readable image that does not meet face or image quality requirements."""
 
