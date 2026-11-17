@@ -71,30 +71,38 @@ Nếu muốn gửi ảnh mới lên để lấy vector theo thời gian thực:
 
 ## 3. CÁCH CÀI ĐẶT, CHẠY SCRIPT XUẤT VECTOR
 
-1. Cài thư viện
-   python -m pip install -r requirements.txt
+11. Cài thư viện:
 
-2. Tải các model ONNX cần thiết
-   python scripts\download_models.py
+```bash
+python -m pip install -r requirements.txt
+```
 
-3. Chạy kiểm thử
-   python -m pytest -v
+2. Tải các model ONNX cần thiết:
 
-4. Xuất vector cho toàn bộ dataset bằng cả hai detector
+```bash
+python scripts/download_models.py
+```
+
+3. Chạy kiểm thử:
+
+```bash
+python -m pytest -v
+```
+
+4. Xuất vector cho toàn bộ dataset bằng cả hai detector:
 
 ```bash
 # Xuất đồng thời cả RetinaFace và SCRFD ra file mới:
 python scripts/export_vectors.py --detector both --out report/dataset_vectors_all.json
 ```
 
-5. Chạy API và thử bằng Swagger
+5. Chạy API:
 
+```bash
 python -m uvicorn app.main:app --port 8000 --reload
+```
 
-- sau đó mở http://localhost:8000/docs,
-- chọn POST /v1/embeddings, rồi chọn detector là retinaface hoặc scrfd và include_192 là true.
-- Kiểm tra response có embedding dài 512 và embedding_192 dài 192.
-
+Sau đó mở http://localhost:8000/docs, chọn `POST /v1/embeddings`, chọn detector là `retinaface` hoặc `scrfd` và đặt `include_192=true`. Kiểm tra response có `embedding` dài 512 và `embedding_192` dài 192.
 
 ---
 
