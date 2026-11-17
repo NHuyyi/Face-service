@@ -351,3 +351,79 @@ def test_invalid_landmarks_fail_clearly(kps, asymmetric_image, face_factory, eng
     with pytest.raises(AlignmentError, match='Landmark'):
         eng.extract(asymmetric_image)
     assert eng.recognizer.seen == []
+
+
+def test_mobilefacenet_recognizer():
+    """Kiểm tra hoạt động của mô hình MobileFaceNet (192 chiều):
+    1. Kiểm tra nạp file model mobile_face_net.tflite qua ai-edge-litert.
+    2. Chạy thử suy luận trên một ảnh khuôn mặt chuẩn 112x112 pixel.
+    3. Xác minh vector đầu ra đúng 192 chiều và đã được chuẩn hoá L2-norm = 1.0.
+    """
+    import os
+    from app.engine.mobilefacenet import MobileFaceNetRecognizer, MOBILEFACENET_DIM
+
+    # 1. Đường dẫn tới file mô hình MobileFaceNet
+    model_path = os.path.join("models", "mobile_face_net.tflite")
+    if not os.path.exists(model_path):
+        pytest.skip("Không có file model mobile_face_net.tflite")
+
+    # 2. Khởi tạo bộ nhận diện MobileFaceNet
+    rec = MobileFaceNetRecognizer(model_path)
+
+    # 3. Tạo ảnh giả lập khuôn mặt 112x112 với 3 kênh màu BGR
+    dummy = np.random.RandomState(42).randint(0, 256, (112, 112, 3), dtype=np.uint8)
+
+    # 4. Trích xuất vector đặc trưng
+    emb = rec.embed(dummy)
+
+    # 5. Kiểm tra kết quả: phải đúng 192 chiều và độ dài vector (L2-norm) phải xấp xỉ 1.0
+    assert emb.shape == (MOBILEFACENET_DIM,)
+    assert np.linalg.norm(emb) == pytest.approx(1.0, abs=1e-5)
+
+
+def test_face_engine_extract_both():
+    """Kiểm tra phương thức FaceEngine.extract_both():
+    1. Sử dụng kỹ thuật Mocking (FakeDet, FakeArcFace, FakeMobileFaceNet) để  kiểm thử .
+    2. Xác minh FaceEngine xuất đồng thời cả 2 vector: vector 512-d (ArcFace) và vector 192-d (MobileFaceNet).
+    3. Đảm bảo cả hai vector đều đạt độ dài chuẩn hoá L2-norm = 1.0.
+    """
+    from app.config import Settings
+    from app.engine import FaceEngine
+    from app.engine.types import DetectedFace
+    from app.matching import l2_normalize
+
+    # 1. Giả lập bộ phát hiện khuôn mặt (Fake Detector)
+    class FakeDet:
+        def detect(self, img):
+            return [DetectedFace(np.array([10, 10, 100, 100.]), 0.95, ARCFACE_TEMPLATE.copy())]
+
+    # 2. Giả lập bộ trích xuất ArcFace (512 chiều)
+    class FakeArcFace:
+        def embed(self, a):
+            return l2_normalize(np.ones(512))
+
+    # 3. Giả lập bộ trích xuất MobileFaceNet (192 chiều)
+    class FakeMobileFaceNet:
+        def embed(self, a):
+            return l2_normalize(np.ones(192))
+
+    # 4. Gắn các thành phần vào FaceEngine
+    eng = FaceEngine.__new__(FaceEngine)
+    eng.s = Settings()
+    eng.detector = FakeDet()
+    eng.recognizer = FakeArcFace()
+    eng.mobilefacenet = FakeMobileFaceNet()
+
+    # 5. Đưa ảnh vào và gọi hàm trích xuất đồng thời 2 vector
+    img = np.zeros((150, 150, 3), np.uint8)
+    res = eng.extract_both(img)
+
+    # 6. Kiểm tra kết quả trích xuất kép
+    # - Vector 512 chiều của ArcFace
+    assert res.embedding.shape == (512,)
+    assert np.linalg.norm(res.embedding) == pytest.approx(1.0, abs=1e-5)
+
+    # - Vector 192 chiều của MobileFaceNet
+    assert res.embedding_192.shape == (192,)
+    assert np.linalg.norm(res.embedding_192) == pytest.approx(1.0, abs=1e-5)
+

@@ -18,6 +18,9 @@ class EmbeddingResponse(BaseModel):
     dim: int
     embedding: List[float]
     face: FaceInfo
+    dim_192: Optional[int] = None
+    embedding_192: Optional[List[float]] = None
+    detector: Optional[str] = None
 
 
 class EnrollResponse(BaseModel):
