@@ -4,6 +4,7 @@ python-multipart>=0.0.9
 numpy>=1.26
 opencv-python-headless>=4.9
 onnxruntime>=1.17          # GPU: thay bằng onnxruntime-gpu
+ai-edge-litert>=2.0        # Chạy model MobileFaceNet TFLite (192-d)
 pydantic>=2.6
 # dev / test
 pytest>=8

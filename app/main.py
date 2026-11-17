@@ -73,9 +73,12 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
 
-    def run_extract(eng, img: np.ndarray) -> FaceResult:
+    def run_extract(eng, img: np.ndarray, detector: Optional[str] = None, extract_192: bool = False) -> FaceResult:
         try:
-            return eng.extract(img)
+            try:
+                return eng.extract(img, detector_backend=detector, extract_192=extract_192)
+            except TypeError:
+                return eng.extract(img)
         except (NoFaceError, AlignmentError) as e:
             raise HTTPException(422, str(e))
 
@@ -86,10 +89,24 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
                 "threshold": cfg.match_threshold, "stored_vectors": request.app.state.store.count()}
 
     @app.post("/v1/embeddings", response_model=EmbeddingResponse, dependencies=[Depends(check_key)])
-    async def embeddings(file: UploadFile = File(...), eng=Depends(get_engine), c: Settings = Depends(get_cfg)):
-        """Ảnh -> vector 512 chiều (không lưu DB). Dành cho nhóm khác tích hợp."""
-        r = run_extract(eng, await read_image(file, c))
-        return EmbeddingResponse(dim=EMBEDDING_DIM, embedding=r.embedding.tolist(), face=_info(r))
+    async def embeddings(
+        file: UploadFile = File(...),
+        detector: Optional[str] = Query(None, description="retinaface hoặc scrfd"),
+        include_192: bool = Query(True, description="Có xuất kèm vector 192 chiều không"),
+        eng=Depends(get_engine),
+        c: Settings = Depends(get_cfg),
+    ):
+        """ -> xuất vector 512 (ArcFace) và 192 (MobileFaceNet) cho RetinaFace / SCRFD."""
+        r = run_extract(eng, await read_image(file, c), detector=detector, extract_192=include_192)
+        v192 = r.embedding_192.tolist() if getattr(r, "embedding_192", None) is not None else None
+        return EmbeddingResponse(
+            dim=EMBEDDING_DIM,
+            embedding=r.embedding.tolist(),   
+            face=_info(r),
+            dim_192=192 if v192 is not None else None,
+            embedding_192=v192,
+            detector=getattr(r, "detector_name", c.detector_backend),
+        )
 
     @app.post("/v1/faces", response_model=EnrollResponse, dependencies=[Depends(check_key)])
     async def enroll(file: UploadFile = File(...), label: Optional[str] = Form(None),
@@ -114,7 +131,8 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
         return {"deleted": face_id}
 
     @app.post("/v1/faces/{face_id}/match", response_model=MatchResponse, dependencies=[Depends(check_key)])
-    async def match_with_stored(face_id: str, file: UploadFile = File(...), threshold: Optional[float] = Form(None),
+    async def match_with_stored(face_id: str, file: UploadFile = File(...),
+                                threshold: Optional[float] = Form(0.40, description="Ngưỡng (mặc định 0.40)"),
                                 eng=Depends(get_engine), db: FaceStore = Depends(get_store),
                                 c: Settings = Depends(get_cfg)):
         """Bước 2: ảnh người thứ hai -> vector 512-d -> so khớp với vector đã lưu (face_id)."""
@@ -130,8 +148,8 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
 
     @app.post("/v1/compare", response_model=MatchResponse, dependencies=[Depends(check_key)])
     async def compare(file_a: UploadFile = File(...), file_b: UploadFile = File(...),
-                      threshold: Optional[float] = Form(None), eng=Depends(get_engine),
-                      c: Settings = Depends(get_cfg)):
+                      threshold: Optional[float] = Form(0.40, description="Ngưỡng so khớp (mặc định 0.40)"),
+                      eng=Depends(get_engine), c: Settings = Depends(get_cfg)):
         """So khớp trực tiếp 2 ảnh, không lưu DB."""
         ra = run_extract(eng, await read_image(file_a, c))
         rb = run_extract(eng, await read_image(file_b, c))
@@ -142,7 +160,8 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
                              threshold=thr, face_a=_info(ra), face_b=_info(rb))
 
     @app.post("/v1/identify", response_model=IdentifyResponse, dependencies=[Depends(check_key)])
-    async def identify(file: UploadFile = File(...), top_k: int = Form(5), threshold: Optional[float] = Form(None),
+    async def identify(file: UploadFile = File(...), top_k: int = Form(5),
+                       threshold: Optional[float] = Form(0.40, description="Ngưỡng so khớp (mặc định 0.40)"),
                        eng=Depends(get_engine), db: FaceStore = Depends(get_store), c: Settings = Depends(get_cfg)):
         """1:N – tìm các vector giống nhất trong DB (1 phép nhân ma trận NumPy)."""
         r = run_extract(eng, await read_image(file, c))

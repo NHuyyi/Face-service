@@ -17,6 +17,7 @@ class Settings:
     retinaface_model: str = field(default_factory=lambda: _env("RETINAFACE_MODEL", "retinaface.onnx"))
     scrfd_model: str = field(default_factory=lambda: _env("SCRFD_MODEL", "det_10g.onnx"))
     arcface_model: str = field(default_factory=lambda: _env("ARCFACE_MODEL", "w600k_r50.onnx"))
+    mobilefacenet_model: str = field(default_factory=lambda: _env("MOBILEFACENET_MODEL", "mobile_face_net.tflite"))
 
     # onnxruntime providers, ví dụ "CUDAExecutionProvider,CPUExecutionProvider"
     providers: str = field(default_factory=lambda: _env("ORT_PROVIDERS", "CPUExecutionProvider"))
