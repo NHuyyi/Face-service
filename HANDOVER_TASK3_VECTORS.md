@@ -43,32 +43,6 @@ File `report/dataset_vectors_all.json` đã được trích xuất sẵn từ to
 }
 ```
 
-**ví dụ về tính So trùng nạp dữ liệu và tính Cosine:**
-```python
-import json
-import numpy as np
-
-# 1. Đọc dữ liệu đã xuất
-with open("report/dataset_vectors_all.json", "r", encoding="utf-8") as f:
-    dataset = json.load(f)["data"]
-
-# 2. Lấy vector của 2 ảnh bất kỳ để so trùng
-rec_A = dataset[0]  # Ví dụ ảnh A
-rec_B = dataset[1]  # Ví dụ ảnh B
-
-# 3. Tính độ tương đồng Cosine cho Vector 512 (ArcFace):
-v512_A = np.array(rec_A["vector_512"])
-v512_B = np.array(rec_B["vector_512"])
-sim_512 = np.dot(v512_A, v512_B) # Vì vector đã L2-norm nên dot product = cosine similarity
-print("Độ tương đồng 512-d (ArcFace):", sim_512)
-
-# 4. Tính độ tương đồng Cosine cho Vector 192 (MobileFaceNet):
-v192_A = np.array(rec_A["vector_192"])
-v192_B = np.array(rec_B["vector_192"])
-sim_192 = np.dot(v192_A, v192_B)
-print("Độ tương đồng 192-d (MobileFaceNet):", sim_192)
-```
-
 ---
 
 ### Cách 2: Gọi qua API Real-time (`POST /v1/embeddings`)
