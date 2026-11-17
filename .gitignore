@@ -27,3 +27,5 @@ datasets/
 /artifacts/benchmark/widerface/subset_200/*
 !/artifacts/benchmark/widerface/subset_200/final_report/
 !/artifacts/benchmark/widerface/subset_200/final_report/**
+!/artifacts/matching_512d/
+!/artifacts/matching_512d/**
