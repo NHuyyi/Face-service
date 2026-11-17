@@ -10,6 +10,9 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
+import base64
+import cv2 as _cv2
+
 from .config import Settings
 from .db import FaceStore
 from .engine import FaceEngine, FaceResult, NoFaceError
@@ -18,7 +21,7 @@ from .engine.image import decode_image
 from .matching import EMBEDDING_DIM, batch_cosine_similarity, cosine_similarity, is_match
 from .schemas import (EmbeddingResponse, EnrollResponse, FaceInfo, FaceSummary, IdentifyCandidate,
                       IdentifyResponse, MatchResponse)
-
+from .validation.quality import validate_face_quality
 log = logging.getLogger("face-service")
 
 
@@ -180,6 +183,104 @@ def create_app(settings: Optional[Settings] = None, engine=None, store: Optional
         log.exception("Lỗi không mong đợi")
         return JSONResponse(status_code=500, content={"detail": "Lỗi nội bộ của service"})
 
+    # ---- /api/v1/faces/validate ---------------------------------------------------
+
+    _MESSAGES: dict[str, str] = {
+        "OK":               "Ảnh đạt yêu cầu chất lượng khuôn mặt.",
+        "INVALID_IMAGE":    "Không đọc được ảnh. Vui lòng gửi file JPEG hoặc PNG hợp lệ.",
+        "IMAGE_TOO_LARGE":  "Ảnh vượt quá dung lượng cho phép.",
+        "NO_FACE":          "Không phát hiện khuôn mặt trong ảnh.",
+        "MULTIPLE_FACES":   "Ảnh có nhiều hơn một khuôn mặt. Vui lòng chụp đúng một người.",
+        "FACE_TOO_SMALL":   "Khuôn mặt quá nhỏ hoặc quá xa camera.",
+        "LOW_DET_SCORE":    "Độ tin cậy phát hiện khuôn mặt quá thấp.",
+        "POSE_ROLL":        "Ảnh bị nghiêng quá nhiều. Vui lòng giữ đầu thẳng.",
+        "POSE_YAW":         "Khuôn mặt quay ngang quá nhiều. Vui lòng nhìn thẳng vào camera.",
+        "POSE_PITCH":       "Khuôn mặt ngửa hoặc cúi quá nhiều. Vui lòng nhìn thẳng vào camera.",
+        "BLURRY":           "Ảnh bị mờ. Vui lòng chụp lại trong điều kiện ánh sáng tốt hơn.",
+        "BAD_BRIGHTNESS":   "Ảnh quá tối hoặc quá sáng. Vui lòng điều chỉnh ánh sáng.",
+    }
+
+    _QUALITY_FAIL_STATUS: dict[str, int] = {
+        "INVALID_IMAGE":  400,
+        "IMAGE_TOO_LARGE": 413,
+    }
+
+    @app.post("/api/v1/faces/validate")
+    def validate_face(
+        request: Request,
+        file: UploadFile = File(...),
+        return_aligned: bool = Form(False),
+    ):
+        """Kiểm tra chất lượng khuôn mặt; trả kết quả từng check và ảnh aligned tùy chọn.
+
+        Endpoint khai báo def (không async) vì xử lý nặng CPU (ONNX inference).
+        FastAPI chạy nó trong threadpool tự động.
+        """
+
+        cfg_obj: Settings = request.app.state.settings
+        detector = request.app.state.engine.detector
+
+        # Đọc file — chạy trong sync context nên dùng file.file trực tiếp
+        raw: bytes = file.file.read()
+        if not raw:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "code": "INVALID_IMAGE",
+                    "message": _MESSAGES["INVALID_IMAGE"],
+                    "data": None,
+                    "quality": None,
+                },
+            )
+        if len(raw) > cfg_obj.max_upload_mb * 1024 * 1024:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "success": False,
+                    "code": "IMAGE_TOO_LARGE",
+                    "message": _MESSAGES["IMAGE_TOO_LARGE"],
+                    "data": None,
+                    "quality": None,
+                },
+            )
+
+        result = validate_face_quality(raw, detector)
+
+        code: str = result["code"]
+        passed: bool = result["passed"]
+        message: str = _MESSAGES.get(code, code)
+
+        # Ảnh aligned → JPEG base64
+        aligned_b64: Optional[str] = None
+        if return_aligned and result.get("aligned") is not None:
+            ok, buf = _cv2.imencode(".jpg", result["aligned"])
+            if ok:
+                aligned_b64 = base64.b64encode(buf.tobytes()).decode()
+
+        face_dict = result.get("face")
+        data_field: Optional[dict] = None
+        if face_dict is not None:
+            data_field = {"face": face_dict}
+            if return_aligned:
+                data_field["aligned_jpeg_b64"] = aligned_b64
+
+        http_status = _QUALITY_FAIL_STATUS.get(code, 200 if passed else 422)
+
+        return JSONResponse(
+            status_code=http_status,
+            content={
+                "success": passed,
+                "code": code,
+                "message": message,
+                "data": data_field,
+                "quality": {
+                    "passed": result["passed"],
+                    "reasons": result["reasons"],
+                    "checks": result["checks"],
+                },
+            },
+        )
     return app
 
 
