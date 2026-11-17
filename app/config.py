@@ -36,12 +36,3 @@ class Settings:
 
     max_upload_mb: int = field(default_factory=lambda: int(_env("MAX_UPLOAD_MB", "10")))
     api_key: str = field(default_factory=lambda: _env("API_KEY", ""))  # rỗng = không bắt buộc
-
-    # --- Ngưỡng kiểm tra chất lượng khuôn mặt (geometry + pose) ---
-    min_face_px: int = field(default_factory=lambda: int(_env("MIN_FACE_PX", "64")))
-    min_eye_dist_px: float = field(default_factory=lambda: float(_env("MIN_EYE_DIST_PX", "20")))
-    min_det_score: float = field(default_factory=lambda: float(_env("MIN_DET_SCORE", "0.6")))
-    max_roll_deg: float = field(default_factory=lambda: float(_env("MAX_ROLL_DEG", "45")))
-    max_yaw_deg: float = field(default_factory=lambda: float(_env("MAX_YAW_DEG", "30")))
-    min_pitch_ratio: float = field(default_factory=lambda: float(_env("MIN_PITCH_RATIO", "0.30")))
-    max_pitch_ratio: float = field(default_factory=lambda: float(_env("MAX_PITCH_RATIO", "0.72")))
